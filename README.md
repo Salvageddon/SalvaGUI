@@ -9,7 +9,7 @@ How to use it:
 5. Call GUI_createGUI() to create GUI base.
 6. Call GUI_create...() to create many control types. For example GUI_createLinearView() creates LinearView control.
 7. Call GUI_bakeGUI() to bake GUI. Mandatory if you want to render it :)
-8. Create a update loop. The same as if you were using only SDL.
+8. Create an update loop. The same as if you were using only SDL.
 9. Call GUI_refreshScreen() to return your screen to refresh your screen every frame.
 10. Call GUI_renderGUI() to render your beautiful Graphical User Interface. Make sure you did step 6. or you'll probably get segfault-ed. Idk, I didn't test what would happen...
 11. Call GUI_updatePixels to see changes on your window.
