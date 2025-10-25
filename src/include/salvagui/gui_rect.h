@@ -7,3 +7,7 @@ typedef struct{
 typedef struct{
     float x, y, w, h;
 } GUI_rectf;
+
+typedef struct{
+    int w, h;
+} GUI_rectc;
