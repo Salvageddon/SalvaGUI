@@ -4,17 +4,25 @@
 
 typedef struct GUI_BASE{
     GUI_window * parent;
+    GUI_rectc rect;
+    GUI_style style;
 } GUI_base;
+
+typedef struct{
+    int onlyOneChild, * orientation;
+} GUI_viewHandler;
 
 typedef struct GUI_CONTEXT{
     void * control;
-    int type, indexSelf;
-    GUI_rect * rect;
+    int type, indexSelf, x, y;
+    struct GUI_CONTEXT * parent;
     GUI_events * events;
     GUI_style * style;
+    GUI_rectc * rect;
     GUI_base * base;
     list childControls;
     SDL_Surface * render;
+    GUI_viewHandler viewHandler;
 } GUI_context;
 
 enum GUI_controlTypes{
@@ -41,8 +49,8 @@ int GUI_initSDL(Uint32 flags){
 //gui_color.h
 
 
-colorRGB GUI_getColorRGB(Uint32 color, SDL_PixelFormat format){
-    colorRGB col;
+GUI_colorRGB GUI_getColorRGB(Uint32 color, SDL_PixelFormat format){
+    GUI_colorRGB col;
 
     SDL_GetRGB(color, 
         SDL_GetPixelFormatDetails(format),
@@ -52,8 +60,8 @@ colorRGB GUI_getColorRGB(Uint32 color, SDL_PixelFormat format){
     return col;
 }
 
-colorRGBA GUI_getColorRGBA(Uint32 color, SDL_PixelFormat format){
-    colorRGBA col;
+GUI_colorRGBA GUI_getColorRGBA(Uint32 color, SDL_PixelFormat format){
+    GUI_colorRGBA col;
 
     SDL_GetRGBA(color, 
         SDL_GetPixelFormatDetails(format),
@@ -63,13 +71,13 @@ colorRGBA GUI_getColorRGBA(Uint32 color, SDL_PixelFormat format){
     return col;
 }
 
-Uint32 GUI_mapColorRGB(colorRGB color, SDL_PixelFormat format){
+Uint32 GUI_mapColorRGB(GUI_colorRGB color, SDL_PixelFormat format){
     return SDL_MapRGB(SDL_GetPixelFormatDetails(format),
         NULL,
         color.r, color.g, color.b);
 }
 
-Uint32 GUI_mapColorRGBA(colorRGBA color, SDL_PixelFormat format){
+Uint32 GUI_mapColorRGBA(GUI_colorRGBA color, SDL_PixelFormat format){
     return SDL_MapRGBA(SDL_GetPixelFormatDetails(format),
         NULL,
         color.r, color.g, color.b, color.a);
@@ -101,79 +109,242 @@ void GUI_updatePixels(GUI_window * win){
     SDL_UpdateWindowSurface(win->win);
 }
 
+void calculateSize(GUI_context * context){
+    int verw = 0, verh = 0, horw = 0, horh = 0;
+
+    for(int i = 0; i < context->childControls.length; i++){
+        GUI_context * child = LST_getValue(context->childControls, i);
+
+        verh += child->rect->h;  
+        verw = verw < child->rect->w ? child->rect->w : verw;
+
+        horw += child->rect->w;
+        horh = horh < child->rect->h ? child->rect->h : horh;
+
+        calculateSize(child);
+    }
+
+    switch(context->rect->w){
+        case GUI_SIZE_WRAP_CONTENT:
+            context->rect->w = verw;
+        break;
+
+        case GUI_SIZE_MATCH_PARENT:
+            context->rect->w = context->parent->rect->w;
+        break;
+
+        default:
+            if(context->rect->w < verw){
+                context->rect->w = verw;
+            }
+        break;
+    }
+
+    switch(context->rect->h){
+        case GUI_SIZE_WRAP_CONTENT:
+            context->rect->h = horh;
+        break;
+
+        case GUI_SIZE_MATCH_PARENT:
+            context->rect->h = context->parent->rect->h;
+        break;
+
+        default:
+            if(context->rect->h < horh){
+                context->rect->h = horh;
+            }
+        break;
+    }
+}
+
+void calculatePos(GUI_context * context){
+    int childX = 0;
+    int childY = 0;
+
+    childX += context->x;
+    childY += context->y;
+
+    int ctrw = 0;
+    int ctrh = 0;
+
+    for(int i = 0; i < context->childControls.length; i++){
+        GUI_context * child = LST_getValue(context->childControls, i);
+
+        ctrw += child->rect->w;
+        ctrh += child->rect->h;
+    }
+
+    int ctrwByCount = 0, ctrhByCount = 0;
+
+    if(context->childControls.length != 0){
+        ctrwByCount = (int)((context->rect->w - ctrw) / (context->childControls.length + 1));
+        ctrhByCount = (int)((context->rect->h - ctrh) / (context->childControls.length + 1));
+    }
+
+    for(int i = 0; i < context->childControls.length; i++){
+        GUI_context * child = LST_getValue(context->childControls, i);
+
+        switch(context->style->childAlignment.hor){
+            case GUI_ALIGNMENT_CENTER:
+                child->x = (int)((context->rect->w - ctrw) * 0.5F) + childX;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_HORIZONTAL){
+                        childX += child->rect->w;
+                    }
+                }
+            break;
+
+            case GUI_ALIGNMENT_SPREAD:
+                childX += ctrwByCount;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_HORIZONTAL){
+                        child->x = childX;
+                        childX += child->rect->w;
+                    }
+                }
+            break;
+
+            case GUI_ALIGNMENT_END:
+                child->x = context->rect->w - childX - child->rect->w;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_HORIZONTAL){
+                        childX += child->rect->w;
+                    }
+                }
+            break;
+
+            default:
+                child->x = childX;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_HORIZONTAL){
+                        childX += child->rect->w;
+                    }
+                }
+            break;
+        }
+
+        switch(context->style->childAlignment.ver){
+            case GUI_ALIGNMENT_CENTER:
+                child->y = (int)((context->rect->h - ctrh) * 0.5F) + childY;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_VERTICAL){
+                        childY += child->rect->h;
+                    }
+                }
+            break;
+
+            case GUI_ALIGNMENT_SPREAD:
+                childY += ctrhByCount;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_VERTICAL){
+                        child->y = childY;
+                        childY += child->rect->h;
+                    }
+                }
+            break;
+
+            case GUI_ALIGNMENT_END:
+                child->y = context->rect->h - childY - child->rect->h;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_VERTICAL){
+                        childY += child->rect->h;
+                    }
+                }
+            break;
+
+            default:
+                child->y = childY;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_VERTICAL){
+                        childY += child->rect->h;
+                    }
+                }
+            break;
+        }
+
+        calculatePos(child);
+    }
+}
+
 void bakeControl(GUI_context * context){
-    SDL_DestroySurface(context->render);
+    for(int i = 0; i < context->childControls.length; i++){
+        GUI_context * child = LST_getValue(context->childControls, i);
+        bakeControl(child);
+        
+        SDL_DestroySurface(child->render);
 
-    int w = context->rect->w;
-    int h = context->rect->h;
+        int w = child->rect->w;
+        int h = child->rect->h;
 
-    SDL_PixelFormat format = context->base->parent->sur->format;
+        SDL_PixelFormat format = child->base->parent->sur->format;
 
-    context->render = SDL_CreateSurface(w, h, format);
+        child->render = SDL_CreateSurface(w, h, format);
 
-    for(int y = 0; y < h; y++){
-        for(int x = 0; x < w; x++){
-            GUI_setPixelOnSur(context->render, x, y, context->style->backgroundColor);
+        for(int y = 0; y < h; y++){
+            for(int x = 0; x < w; x++){
+                GUI_setPixelOnSur(child->render, x, y, child->style->backgroundColor);
+            }
         }
     }
 }
 
-void bakeLoopControlList(list * l){
-    for(int i = 0; i < l->length; i++){
-        GUI_context * context = LST_getValue(*l, i);
-        bakeControl(context);
-        bakeLoopControlList(&context->childControls);
-    }
-}
-
-void GUI_bakeControls(GUI_window * win){
+void GUI_bakeGUI(GUI_window * win){
     if(win == NULL){
-        printf("SalvaGUI (bakeControlsFromWindow()): Window must not be NULL\n");
+        printf("SalvaGUI (bakeGUI()): Window must not be NULL\n");
         return;
     }
 
     if(win->gui == NULL){
-        printf("SalvaGUI (bakeControlsFromWindow()): Base context must not be NULL\n");
+        printf("SalvaGUI (bakeGUI()): Base context doesn't exist\n");
         return;
     }
 
-    bakeLoopControlList(&win->gui->childControls);
+    calculateSize(win->gui);
+    calculatePos(win->gui);
+    bakeControl(win->gui);
 }
 
 void renderControl(GUI_context * context, GUI_window * win){
-    int w = context->rect->w;
-    int h = context->rect->h;
+    if(context->type != GUI_CTR_TYPE_BASE && context->type){
+        int w = context->render->w;
+        int h = context->render->h;
 
-    int x1 = context->rect->x;
-    int y1 = context->rect->y;
+        int x1 = context->x;
+        int y1 = context->y;
 
-    for(int y = 0; y < h; y++){
-        for(int x = 0; x < w; x++){
-            GUI_setPixel(win, x1 + x, y1 + y, context->style->backgroundColor);
+        for(int y = 0; y < h; y++){
+            for(int x = 0; x < w; x++){
+                GUI_setPixel(win, x1 + x, y1 + y, GUI_getPixelFromSur(context->render, x, y));
+            }
         }
     }
-}
 
-void renderLoopControlList(list * l, GUI_window * win){
-    for(int i = 0; i < l->length; i++){
-        GUI_context * context = LST_getValue(*l, i);
-        renderControl(context, win);
-        renderLoopControlList(&context->childControls, win);
+    for(int i = 0; i < context->childControls.length; i++){
+        GUI_context * child = LST_getValue(context->childControls, i);
+        renderControl(child, win);
     }
 }
 
-void GUI_renderControls(GUI_window * win){
+void GUI_renderGUI(GUI_window * win){
     if(win == NULL){
-        printf("SalvaGUI (bakeControlsFromWindow()): Window must not be NULL\n");
+        printf("SalvaGUI (renderGUI()): Window must not be NULL\n");
         return;
     }
 
     if(win->gui == NULL){
-        printf("SalvaGUI (bakeControlsFromWindow()): Base context must not be NULL\n");
+        printf("SalvaGUI (renderGUI()): Base context doesn't exist\n");
         return;
     }
 
-    renderLoopControlList(&win->gui->childControls, win);
+    renderControl(win->gui, win);
 }
 
 void GUI_refreshScreen(GUI_window * win){
@@ -188,7 +359,7 @@ void GUI_refreshScreen(GUI_window * win){
 //gui_controls.h
 
 
-GUI_context * createContext(void * control, GUI_events * events, GUI_style * style, GUI_rect * rect, GUI_base * base, int type){
+GUI_context * createContext(void * control, GUI_context * parent, GUI_viewHandler viewHandler, GUI_events * events, GUI_style * style, GUI_rectc * rect, GUI_base * base, int type){
     GUI_context * o = malloc(sizeof(GUI_context));
 
     o->control = control;
@@ -200,6 +371,8 @@ GUI_context * createContext(void * control, GUI_events * events, GUI_style * sty
     o->childControls = LST_createList();
     o->render = NULL;
     o->indexSelf = 0;
+    o->viewHandler = viewHandler;
+    o->parent = parent;
 
     return o;
 }
@@ -229,93 +402,83 @@ GUI_events initEvents(void){
 
 GUI_style initStyle(void){
     return (GUI_style){
-        0
+        0x000000,
+        (GUI_margin){10, 10, 10, 10},
+        (GUI_padding){10, 10, 10, 10}
     };
 }
 
-GUI_rect initRect(void){
-    return (GUI_rect){
-        0, 0, 0, 0
+GUI_rectc initRect(void){
+    return (GUI_rectc){
+        GUI_SIZE_WRAP_CONTENT,
+        GUI_SIZE_WRAP_CONTENT
     };
 }
 
-void calculateControlPos(GUI_context * parent, GUI_context * context){
-    if(parent->childControls.length < 1){
-        return;
+void * GUI_getControl(GUI_context * context){
+    if(context != NULL){
+        if(context->type != GUI_CTR_TYPE_BASE) return context->control;
     }
 
-    GUI_context * last = LST_getValue(parent->childControls, parent->childControls.length);
-
-    context->rect->x = last->rect->x + last->rect->w;
-    context->rect->y = last->rect->y + last->rect->h;
+    return NULL;
 }
 
-GUI_linearView * GUI_createLinearView(GUI_context * parent, GUI_context * linearView){
+GUI_context * GUI_createLinearView(GUI_context * parent){
     if(parent == NULL){
         printf("SalvaGUI (createLinearView()): Parent context must not be NULL\n");
         return NULL;
     }
 
-    GUI_linearView * _linearView = malloc(sizeof(GUI_linearView));
+    GUI_linearView * linearView = malloc(sizeof(GUI_linearView));
 
-    _linearView->events = initEvents();
-    _linearView->style = initStyle();
-    _linearView->rect = initRect();
+    linearView->events = initEvents();
+    linearView->style = initStyle();
+    linearView->rect = initRect();
     
-    _linearView->orientation = GUI_ORIENTATION_HORIZONTAL;
+    linearView->orientation = GUI_ORIENTATION_HORIZONTAL;
 
-    GUI_context * context = createContext(_linearView, 
-        &_linearView->events, 
-        &_linearView->style, 
-        &_linearView->rect,
+    GUI_context * context = createContext(linearView, 
+        parent,
+        (GUI_viewHandler){0, &linearView->orientation},
+        &linearView->events, 
+        &linearView->style, 
+        &linearView->rect,
         parent->base, 
         GUI_CTR_TYPE_LINEARVIEW);
 
-    if(linearView != NULL){
-        destroyContext(linearView);
-        linearView = context;
-    }
-
-    calculateControlPos(parent, context);
     LST_addElement(&parent->childControls, context);
 
     context->indexSelf = parent->childControls.length - 1;
 
-    return _linearView;
+    return context;
 }
 
-GUI_button * GUI_createButton(GUI_context * parent, GUI_context * button){
+GUI_context * GUI_createButton(GUI_context * parent){
     if(parent == NULL){
         printf("SalvaGUI (createButton()): Parent context must not be NULL\n");
         return NULL;
     }
 
-    GUI_button * _button = malloc(sizeof(GUI_button));
+    GUI_button * button = malloc(sizeof(GUI_button));
 
-    _button->events = initEvents();
-    _button->style = initStyle();
-    _button->rect = initRect();
-    
-    _button->text = "";
+    button->events = initEvents();
+    button->style = initStyle();
+    button->rect = initRect();
 
-    GUI_context * context = createContext(_button, 
-        &_button->events, 
-        &_button->style, 
-        &_button->rect, 
+    GUI_context * context = createContext(button, 
+        parent,
+        (GUI_viewHandler){1, 0},
+        &button->events, 
+        &button->style, 
+        &button->rect, 
         parent->base,
         GUI_CTR_TYPE_BUTTON);
 
-    if(button != NULL){
-        destroyContext(button);
-        button = context;
-    }
-
-    calculateControlPos(parent, context);
     context->indexSelf = parent->childControls.length;
 
     LST_addElement(&parent->childControls, context);
 
-    return _button;
+    return context;
 }
 
 
@@ -353,13 +516,18 @@ int GUI_createGUI(GUI_window * win){
     
     GUI_base * base = malloc(sizeof(GUI_base));
 
+    base->style = initStyle();
+    
     base->parent = win;
+    base->rect = (GUI_rectc){win->w, win->h};
+    base->style.margin = (GUI_margin){0, 0, 0, 0};
+    base->style.padding = (GUI_padding){0, 0, 0, 0};
 
     if(win->gui != NULL){
         GUI_destroyGUI(win);
     }
     
-    win->gui = createContext(base, NULL, NULL, NULL, base, GUI_CTR_TYPE_BASE);
+    win->gui = createContext(base, NULL, (GUI_viewHandler){1, 0}, NULL, &base->style, &base->rect, base, GUI_CTR_TYPE_BASE);
 
     return 0;
 }
