@@ -49,8 +49,8 @@ int GUI_initSDL(Uint32 flags){
 //gui_color.h
 
 
-colorRGB GUI_getColorRGB(Uint32 color, SDL_PixelFormat format){
-    colorRGB col;
+GUI_colorRGB GUI_getColorRGB(Uint32 color, SDL_PixelFormat format){
+    GUI_colorRGB col;
 
     SDL_GetRGB(color, 
         SDL_GetPixelFormatDetails(format),
@@ -60,8 +60,8 @@ colorRGB GUI_getColorRGB(Uint32 color, SDL_PixelFormat format){
     return col;
 }
 
-colorRGBA GUI_getColorRGBA(Uint32 color, SDL_PixelFormat format){
-    colorRGBA col;
+GUI_colorRGBA GUI_getColorRGBA(Uint32 color, SDL_PixelFormat format){
+    GUI_colorRGBA col;
 
     SDL_GetRGBA(color, 
         SDL_GetPixelFormatDetails(format),
@@ -71,13 +71,13 @@ colorRGBA GUI_getColorRGBA(Uint32 color, SDL_PixelFormat format){
     return col;
 }
 
-Uint32 GUI_mapColorRGB(colorRGB color, SDL_PixelFormat format){
+Uint32 GUI_mapColorRGB(GUI_colorRGB color, SDL_PixelFormat format){
     return SDL_MapRGB(SDL_GetPixelFormatDetails(format),
         NULL,
         color.r, color.g, color.b);
 }
 
-Uint32 GUI_mapColorRGBA(colorRGBA color, SDL_PixelFormat format){
+Uint32 GUI_mapColorRGBA(GUI_colorRGBA color, SDL_PixelFormat format){
     return SDL_MapRGBA(SDL_GetPixelFormatDetails(format),
         NULL,
         color.r, color.g, color.b, color.a);
@@ -168,13 +168,13 @@ void calculatePos(GUI_context * context){
         GUI_context * child = LST_getValue(context->childControls, i);
 
         switch(context->style->childAlignment.hor){
-            case GUI_POSITION_CENTER:
+            case GUI_ALIGNMENT_CENTER:
             break;
 
-            case GUI_POSITION_SPREAD:
+            case GUI_ALIGNMENT_SPREAD:
             break;
 
-            case GUI_POSITION_END:
+            case GUI_ALIGNMENT_END:
                 child->x = context->rect->w - childX - child->rect->w;
                 if(context->viewHandler.orientation){
                     int orientation = *context->viewHandler.orientation;
@@ -196,13 +196,13 @@ void calculatePos(GUI_context * context){
         }
 
         switch(context->style->childAlignment.ver){
-            case GUI_POSITION_CENTER:
+            case GUI_ALIGNMENT_CENTER:
             break;
 
-            case GUI_POSITION_SPREAD:
+            case GUI_ALIGNMENT_SPREAD:
             break;
 
-            case GUI_POSITION_END:
+            case GUI_ALIGNMENT_END:
                 child->y = context->rect->h - childY - child->rect->h;
                 if(context->viewHandler.orientation){
                     int orientation = *context->viewHandler.orientation;
@@ -369,7 +369,11 @@ GUI_rectc initRect(void){
 }
 
 void * GUI_getControl(GUI_context * context){
-    if(context->type != GUI_CTR_TYPE_BASE) return context->control;
+    if(context != NULL){
+        if(context->type != GUI_CTR_TYPE_BASE) return context->control;
+    }
+
+    return NULL;
 }
 
 GUI_context * GUI_createLinearView(GUI_context * parent){

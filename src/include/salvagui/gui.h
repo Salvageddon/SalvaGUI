@@ -25,4 +25,10 @@
 #include "gui_render.h"
 #include "gui_color.h"
 
+/* 
+    Initializes SDL3 library.
+
+    \param flags SDL_Init() flags
+    \returns 1 on error or 0 on success
+*/
 int GUI_initSDL(Uint32 flags);
