@@ -126,7 +126,7 @@ void calculateSize(GUI_context * context){
 
     switch(context->rect->w){
         case GUI_SIZE_WRAP_CONTENT:
-            context->rect->w = horw;
+            context->rect->w = verw;
         break;
 
         case GUI_SIZE_MATCH_PARENT:
@@ -164,14 +164,46 @@ void calculatePos(GUI_context * context){
     childX += context->x;
     childY += context->y;
 
+    int ctrw = 0;
+    int ctrh = 0;
+
+    for(int i = 0; i < context->childControls.length; i++){
+        GUI_context * child = LST_getValue(context->childControls, i);
+
+        ctrw += child->rect->w;
+        ctrh += child->rect->h;
+    }
+
+    int ctrwByCount = 0, ctrhByCount = 0;
+
+    if(context->childControls.length != 0){
+        ctrwByCount = (int)((context->rect->w - ctrw) / (context->childControls.length + 1));
+        ctrhByCount = (int)((context->rect->h - ctrh) / (context->childControls.length + 1));
+    }
+
     for(int i = 0; i < context->childControls.length; i++){
         GUI_context * child = LST_getValue(context->childControls, i);
 
         switch(context->style->childAlignment.hor){
             case GUI_ALIGNMENT_CENTER:
+                child->x = (int)((context->rect->w - ctrw) * 0.5F) + childX;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_HORIZONTAL){
+                        childX += child->rect->w;
+                    }
+                }
             break;
 
             case GUI_ALIGNMENT_SPREAD:
+                childX += ctrwByCount;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_HORIZONTAL){
+                        child->x = childX;
+                        childX += child->rect->w;
+                    }
+                }
             break;
 
             case GUI_ALIGNMENT_END:
@@ -197,9 +229,24 @@ void calculatePos(GUI_context * context){
 
         switch(context->style->childAlignment.ver){
             case GUI_ALIGNMENT_CENTER:
+                child->y = (int)((context->rect->h - ctrh) * 0.5F) + childY;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_VERTICAL){
+                        childY += child->rect->h;
+                    }
+                }
             break;
 
             case GUI_ALIGNMENT_SPREAD:
+                childY += ctrhByCount;
+                if(context->viewHandler.orientation){
+                    int orientation = *context->viewHandler.orientation;
+                    if(orientation == GUI_ORIENTATION_VERTICAL){
+                        child->y = childY;
+                        childY += child->rect->h;
+                    }
+                }
             break;
 
             case GUI_ALIGNMENT_END:
