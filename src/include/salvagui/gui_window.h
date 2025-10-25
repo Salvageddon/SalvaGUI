@@ -4,12 +4,13 @@
 #include "gui_controls.h"
 
 typedef struct{
-    GUI_context * gui;
+    GUI_context * gui; 
     
-    SDL_Window * win;
-    SDL_Surface * sur;
+    SDL_Window * win; 
+    SDL_Surface * sur; 
 
-    int w, h;
+    int w; 
+    int h; 
 } GUI_window;
 
 typedef struct GUI_BASE GUI_base;
